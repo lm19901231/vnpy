@@ -1,0 +1,17 @@
+[
+    {
+        "name": "double ema",
+        "className": "DoubleEmaDemo",
+        "vtSymbol": "IF1703"
+    },
+    {
+        "name": "test",
+        "className": "TalibDoubleSmaDemo",
+        "vtSymbol": "IF1703"
+    },
+    {
+        "name": "tradeTest",
+        "className": "tradeTest",
+        "vtSymbol": "IF1703,IC1703"
+    }
+]想·
