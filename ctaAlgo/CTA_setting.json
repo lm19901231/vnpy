@@ -2,6 +2,16 @@
     {
         "name": "test2",
         "className": "Test2",
-        "vtSymbol": "IH1706,IH1709"
+        "vtSymbol": "IC1705,IC1706"
+    },
+    {
+        "name": "double ema",
+        "className": "DoubleEmaDemo",
+        "vtSymbol": "IF1704"
+    },
+    {
+        "name": "test1",
+        "className": "Test1",
+        "vtSymbol": "IF1705"
     }
 ]

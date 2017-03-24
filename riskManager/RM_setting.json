@@ -4,5 +4,5 @@
     "tradeLimit": 100, 
     "orderSizeLimit": 4, 
     "active": true, 
-    "orderFlowLimit": 5
+    "orderFlowLimit": 4
 }

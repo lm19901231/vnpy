@@ -54,7 +54,7 @@ def main():
     
     # 在主线程中启动Qt事件循环
     sys.exit(app.exec_())
-    # app.exec_()
+
     
 if __name__ == '__main__':
     main()

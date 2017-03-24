@@ -212,6 +212,14 @@ class CtaEngine(object):
             so.status = STOPORDER_CANCELLED
             del self.workingStopOrderDict[stopOrderID]
 
+    # ----------------------------------------------------------------------
+    def requireCheck(self, req):
+        """策略需求检查"""
+
+        # 将策略需求和现有持仓发送给主引擎，交由风控引擎检查
+        return self.mainEngine.requireCheck(req, self.posBufferDict)
+
+
     #----------------------------------------------------------------------
     def processStopOrder(self, tick):
         """收到行情后处理本地停止单（检查是否要立即发出）"""
@@ -310,7 +318,17 @@ class CtaEngine(object):
                 posBuffer.vtSymbol = pos.vtSymbol
                 self.posBufferDict[pos.vtSymbol] = posBuffer
             posBuffer.updatePositionData(pos)
-    
+            # print posBuffer.vtSymbol, posBuffer.longPosition, posBuffer.shortPosition
+            # print self.posBufferDict
+
+    # ----------------------------------------------------------------------
+    def processAbnormalStop(self, event):
+        """风控停止策略运行"""
+        # 触发事中风控规则，导致强制停止策略运行 by lm
+        # 全部策略停止
+        for name in self.strategyDict.keys():
+            self.stopStrategy(name)
+
     #----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
@@ -318,6 +336,7 @@ class CtaEngine(object):
         self.eventEngine.register(EVENT_ORDER, self.processOrderEvent)
         self.eventEngine.register(EVENT_TRADE, self.processTradeEvent)
         self.eventEngine.register(EVENT_POSITION, self.processPositionEvent)
+        self.eventEngine.register(EVENT_RMSTOP, self.processAbnormalStop)
  
     #----------------------------------------------------------------------
     def insertData(self, dbName, collectionName, data):
@@ -439,8 +458,10 @@ class CtaEngine(object):
             strategy = self.strategyDict[name]
             
             if strategy.inited and not strategy.trading:
-                strategy.trading = True
-                self.callStrategyFunc(strategy, strategy.onStart)
+                #  策略启动前进行风控检查，确认策略需求是否能得到满足
+                if strategy.onStart():
+                    strategy.trading = True
+
         else:
             self.writeCtaLog(u'策略实例不存在：%s' %name)
     

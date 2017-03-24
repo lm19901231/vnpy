@@ -21,6 +21,7 @@ class DoubleEmaDemo(CtaTemplate):
     """双指数均线策略Demo"""
     className = 'DoubleEmaDemo'
     author = u'用Python的交易员'
+    name = 'double ema'  # 策略实例名称
     
     # 策略参数
     fastK = 0.9     # 快速EMA参数
@@ -30,6 +31,7 @@ class DoubleEmaDemo(CtaTemplate):
     # 策略变量
     bar = None
     barMinute = EMPTY_STRING
+    pos = {}
     
     fastMa = []             # 快速EMA均线数组
     fastMa0 = EMPTY_FLOAT   # 当前最新的快速EMA
@@ -67,13 +69,18 @@ class DoubleEmaDemo(CtaTemplate):
         # 策略时方便（更多是个编程习惯的选择）
         self.fastMa = []
         self.slowMa = []
+
+        self.vtSymbol = self.vtSymbolList[0]
+
+        # 初始化持仓
+        self.pos[self.vtSymbol] = 0
         
     #----------------------------------------------------------------------
     def onInit(self):
         """初始化策略（必须由用户继承实现）"""
         self.writeCtaLog(u'双EMA演示策略初始化')
         
-        initData = self.loadBar(self.initDays)
+        initData = self.loadBar(self.vtSymbol, self.initDays)
         for bar in initData:
             self.onBar(bar)
         
@@ -158,18 +165,18 @@ class DoubleEmaDemo(CtaTemplate):
         if crossOver:
             # 如果金叉时手头没有持仓，则直接做多
             if self.pos == 0:
-                self.buy(bar.close, 1)
+                self.buy(bar.close, self.vtSymbol, 1)
             # 如果有空头持仓，则先平空，再做多
             elif self.pos < 0:
-                self.cover(bar.close, 1)
-                self.buy(bar.close, 1)
+                self.cover(bar.close, self.vtSymbol, 1)
+                self.buy(bar.close, self.vtSymbol, 1)
         # 死叉和金叉相反
         elif crossBelow:
             if self.pos == 0:
-                self.short(bar.close, 1)
+                self.short(bar.close, self.vtSymbol, 1)
             elif self.pos > 0:
-                self.sell(bar.close, 1)
-                self.short(bar.close, 1)
+                self.sell(bar.close, self.vtSymbol, 1)
+                self.short(bar.close, self.vtSymbol, 1)
                 
         # 发出状态更新事件
         self.putEvent()

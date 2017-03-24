@@ -243,8 +243,8 @@ class CtaEngineManager(QtGui.QWidget):
     def load(self):
         """加载策略"""
         if not self.strategyLoaded:
-            self.ctaEngine.loadSetting()
-            self.initStrategyManager()
+            self.ctaEngine.loadSetting()  #  加载策略
+            self.initStrategyManager()    #  初始化策略管理组件界面
             self.strategyLoaded = True
             self.ctaEngine.writeCtaLog(u'策略加载成功')
         

@@ -164,7 +164,14 @@ class MainEngine(object):
             gateway.cancelOrder(cancelOrderReq)
         else:
             self.writeLog(u'接口不存在：%s' %gatewayName)
-        
+
+    # ----------------------------------------------------------------------
+    def requireCheck(self, req, posBufferDict):
+        """策略需求检查"""
+
+        # 将策略需求及现有持仓交由风控引擎进行检查
+        return self.rmEngine.strategyCheck(req, posBufferDict)
+
     #----------------------------------------------------------------------
     def qryAccont(self, gatewayName):
         """查询特定接口的账户"""

@@ -14,6 +14,7 @@ class Test1(CtaTemplate):
 
     className = 'Test1'
     author = u'lm'
+    name = 'test1'  # 策略实例名称
 
     # 策略参数
     limitPrice = 3400

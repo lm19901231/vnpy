@@ -31,6 +31,7 @@ class CtaTemplate(object):
     inited = False       # 是否进行了初始化
     trading = False      # 是否启动交易，由引擎管理
     pos = {}             # 持仓情况，支持多合约，使用dict结构存储
+    req = {}             # 策略需求，用于风控检查，提前锁定资金
 
     # 参数列表，保存了参数的名称
     paramList = ['name',
@@ -142,6 +143,15 @@ class CtaTemplate(object):
             self.ctaEngine.cancelStopOrder(vtOrderID)
         else:
             self.ctaEngine.cancelOrder(vtOrderID)
+
+    # ----------------------------------------------------------------------
+    def requireCheck(self, req):
+        """策略需求检查（必须由用户继承实现）"""
+        if req:
+            return self.ctaEngine.requireCheck(req)
+        else:
+            print u'没有提交需求检查'
+            return False
 
     # ----------------------------------------------------------------------
     def insertTick(self, vtSymbol, tick):

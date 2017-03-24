@@ -133,4 +133,14 @@ class CtaTickData(object):
         self.askVolume2 = EMPTY_INT
         self.askVolume3 = EMPTY_INT
         self.askVolume4 = EMPTY_INT
-        self.askVolume5 = EMPTY_INT    
+        self.askVolume5 = EMPTY_INT
+
+########################################################################
+class StategyRequireData(object):
+    """策略需求数据"""
+
+    # ----------------------------------------------------------------------
+    def __init__(self):
+        self.vtSymbol = EMPTY_STRING     # vt系统合约代码
+        self.direction = EMPTY_STRING    # 合约方向
+        self.volume = EMPTY_INT          # 合约数量

@@ -8,14 +8,14 @@
 在CTA_setting.json中写入具体每个策略对象的类和合约设置。
 '''
 
-# from ctaDemo import DoubleEmaDemo
+from ctaDemo import DoubleEmaDemo
 # from talibDemo import TalibDoubleSmaDemo
 # from ctaTradeTest import tradeTest
 from test1 import Test1
 from test2 import Test2
 
 STRATEGY_CLASS = {}
-# STRATEGY_CLASS['DoubleEmaDemo'] = DoubleEmaDemo
+STRATEGY_CLASS['DoubleEmaDemo'] = DoubleEmaDemo
 # STRATEGY_CLASS['TalibDoubleSmaDemo'] = TalibDoubleSmaDemo
 # STRATEGY_CLASS['tradeTest'] = tradeTest
 STRATEGY_CLASS['Test1'] = Test1
