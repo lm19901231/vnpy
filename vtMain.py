@@ -32,10 +32,6 @@ def main():
     app = QtGui.QApplication(sys.argv)
     app.setWindowIcon(QtGui.QIcon(ICON_FILENAME))
     app.setFont(BASIC_FONT)
-
-    app1 = QtGui.QApplication(sys.argv)
-    app1.setWindowIcon(QtGui.QIcon(ICON_FILENAME))
-    app1.setFont(BASIC_FONT)
     
     # 设置Qt的皮肤
     try:

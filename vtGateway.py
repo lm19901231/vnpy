@@ -432,7 +432,17 @@ class VtCancelOrderReq(object):
         self.sessionID = EMPTY_STRING           # 会话号
   
     
-    
+########################################################################
+class VtPopupData(VtBaseData):
+    """弹窗数据类"""
+
+    # ----------------------------------------------------------------------
+    def __init__(self):
+        """Constructor"""
+        self.name = EMPTY_STRING      # 策略名称
+        self.vtSymbol = EMPTY_STRING  # 合约代码
+        self.require = EMPTY_STRING   # 是否请求
+        self.status = EMPTY_STRING    # 状态
     
     
     

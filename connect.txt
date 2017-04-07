@@ -1,0 +1,18 @@
+connect1 真实行情，模拟交易
+
+	"brokerID": "9999",
+    "tdAddress": "tcp://180.168.146.187:10000",
+    "password": "lm2753",
+    "mdAddress": "tcp://180.168.146.187:10010",
+    "userID": "082801"
+
+
+connect2  仿真行情，真实交易
+
+	"brokerID": "4200",
+    "tdAddress": "tcp://58.247.2.86:21205",
+    "password": "661904",
+    "mdAddress": "tcp://58.247.2.86:21213",
+    "userID": "00006293"
+
+    

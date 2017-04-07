@@ -1,8 +1,8 @@
 {
-    "orderFlowClear": 4, 
-    "workingOrderLimit": 4, 
+    "orderFlowClear": 2, 
+    "workingOrderLimit": 5, 
     "tradeLimit": 100, 
-    "orderSizeLimit": 4, 
+    "orderSizeLimit": 5, 
     "active": true, 
-    "orderFlowLimit": 4
+    "orderFlowLimit": 10
 }

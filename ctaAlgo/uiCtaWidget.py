@@ -7,6 +7,8 @@ CTA模块相关的GUI控制组件
 
 from uiBasicWidget import QtGui, QtCore, BasicCell
 from eventEngine import *
+from vtGateway import VtPopupData
+import sys
 
 
 ########################################################################
@@ -58,6 +60,7 @@ class CtaValueMonitor(QtGui.QTableWidget):
 class CtaStrategyManager(QtGui.QGroupBox):
     """策略管理组件"""
     signal = QtCore.pyqtSignal(type(Event()))
+    signal1 = QtCore.pyqtSignal(type(Event()))
 
     #----------------------------------------------------------------------
     def __init__(self, ctaEngine, eventEngine, name, parent=None):
@@ -67,6 +70,8 @@ class CtaStrategyManager(QtGui.QGroupBox):
         self.ctaEngine = ctaEngine
         self.eventEngine = eventEngine
         self.name = name
+        self.pp = ''
+        self.popup = ''
         
         self.initUi()
         self.updateMonitor()
@@ -119,13 +124,35 @@ class CtaStrategyManager(QtGui.QGroupBox):
             
         varDict = self.ctaEngine.getStrategyVar(self.name)
         if varDict:
-            self.varMonitor.updateData(varDict)        
-            
+            self.varMonitor.updateData(varDict)
+
+    # ----------------------------------------------------------------------
+    def openPopup(self, event):
+        """打开弹窗"""
+        print 3
+        self.popup = event.dict_['data']
+        print '3',self.popup.require
+        if self.popup.require == True:
+            self.pp = OrderConfirmDialog(self.eventEngine, self.popup.name)
+            print 'pp.status', self.pp.status
+            self.pp.show()
+            # 等待弹窗赋值
+            # while self.pp.status != 'empty':
+            #     self.popup.status = self.pp.status
+            #     self.popup.require == False
+            #     print 'popup.status',self.popup.status
+            #     event = Event(EVENT_POPUP)
+            #     event.dict_['data'] = popup
+            #     self.eventEngine.put(event)
+
+
     #----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
         self.signal.connect(self.updateMonitor)
         self.eventEngine.register(EVENT_CTA_STRATEGY+self.name, self.signal.emit)
+        self.signal1.connect(self.openPopup)
+        self.eventEngine.register(EVENT_POPUP, self.signal1.emit)
     
     #----------------------------------------------------------------------
     def init(self):
@@ -219,13 +246,13 @@ class CtaEngineManager(QtGui.QWidget):
         vbox.addStretch()
         
         w.setLayout(vbox)
-        self.scrollArea.setWidget(w)   
+        self.scrollArea.setWidget(w)
         
     #----------------------------------------------------------------------
     def initAll(self):
         """全部初始化"""
         for name in self.ctaEngine.strategyDict.keys():
-            self.ctaEngine.initStrategy(name)    
+            self.ctaEngine.initStrategy(name)
             
     #----------------------------------------------------------------------
     def startAll(self):
@@ -261,7 +288,57 @@ class CtaEngineManager(QtGui.QWidget):
         self.signal.connect(self.updateCtaLog)
         self.eventEngine.register(EVENT_CTA_LOG, self.signal.emit)
         
-        
+
+########################################################################
+class OrderConfirmDialog(QtGui.QDialog):
+    """弹窗确认"""
+
+    def __init__(self, eventEngine, name):
+        QtGui.QWidget.__init__(self)
+        button1 = QtGui.QPushButton(self)
+        button2 = QtGui.QPushButton(self)
+        text = QtGui.QLabel(self)
+        text.setText("this is a order string")
+        self.setGeometry(400, 400, 400, 200)
+        self.status = 'empty'
+        self.name = name
+        self.eventEngine = eventEngine
+
+        button1.setText("yes")
+        button2.setText("No")
+        button1.move(100, 150)
+        button2.move(200, 150)
+        button1.clicked.connect(self.showdialog1)
+        button2.clicked.connect(self.showdialog2)
+        self.setWindowTitle(u"Attention!!!")
+        self.show()
+        self.popup = VtPopupData()
+        self.popup.name = self.name
+        self.popup.require = False
+
+
+    def showdialog1(self):
+        self.status = 'yes'
+        print 'yes'
+        # self.ctaEngine.processPopup(self.status)
+        self.popup.status = self.status
+        print 'popup.status', self.popup.status
+        event = Event(EVENT_POPUP)
+        event.dict_['data'] = self.popup
+        self.eventEngine.put(event)
+        self.close()
+
+    def showdialog2(self):
+        self.status = 'no'
+        print 'no'
+        # self.ctaEngine.processPopup(self.status)
+        self.popup.status = self.status
+        print 'popup.status', self.popup.status
+        event = Event(EVENT_POPUP)
+        event.dict_['data'] = self.popup
+        self.eventEngine.put(event)
+        self.close()
+
     
     
     

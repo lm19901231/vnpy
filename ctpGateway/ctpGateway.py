@@ -657,6 +657,7 @@ class CtpTdApi(TdApi):
     #----------------------------------------------------------------------
     def onRspQryInvestorPosition(self, data, error, n, last):
         """持仓查询回报"""
+        # print data
         # 获取缓存字典中的持仓缓存，若无则创建并初始化
         positionName = '.'.join([data['InstrumentID'], data['PosiDirection']])
         
@@ -1386,6 +1387,7 @@ class PositionBuffer(object):
         self.ydPosition = EMPTY_INT
         self.todayPositionCost = EMPTY_FLOAT
         self.ydPositionCost = EMPTY_FLOAT
+        self.frozen = EMPTY_INT
         
         # 通过提前创建持仓数据对象并重复使用的方式来降低开销
         pos = VtPositionData()
@@ -1393,6 +1395,7 @@ class PositionBuffer(object):
         pos.vtSymbol = self.symbol
         pos.gatewayName = gatewayName
         pos.direction = self.direction
+        pos.frozen = self.frozen
         pos.vtPositionName = '.'.join([pos.vtSymbol, pos.direction]) 
         self.pos = pos
         
@@ -1406,8 +1409,9 @@ class PositionBuffer(object):
             self.ydPositionCost = data['PositionCost']   
         else:
             self.todayPosition = data['Position']
-            self.todayPositionCost = data['PositionCost']        
-            
+            self.todayPositionCost = data['PositionCost']
+
+        self.frozen = data['ShortFrozen']
         # 持仓的昨仓和今仓相加后为总持仓
         self.pos.position = self.todayPosition + self.ydPosition
         self.pos.ydPosition = self.ydPosition
@@ -1427,6 +1431,7 @@ class PositionBuffer(object):
         """更新其他交易所的缓存，返回更新后的持仓数据"""
         # 其他交易所并不区分今昨，因此只关心总仓位，昨仓设为0
         self.pos.position = data['Position']
+        self.pos.frozen = data['ShortFrozen']
         self.pos.ydPosition = 0
         
         if data['Position']:

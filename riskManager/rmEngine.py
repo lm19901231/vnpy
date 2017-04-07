@@ -55,11 +55,19 @@ class RmEngine(object):
 
         # 策略需求风控检查相关 by lm
         self.account = EMPTY_FLOAT          # 账户可用资金
-        self.accountFreeze = EMPTY_FLOAT    # 冻结可用资金
         self.posFreezeDict = {}             # 账户冻结持仓
+
+        # 保证金相关
+        self.marginDict = {}                # 保证金字典
+        self.marginDict['IF'] = marginData()
+        self.marginDict['IH'] = marginData()
+        self.marginDict['IC'] = marginData()
         self.margin = EMPTY_FLOAT           # 保证金
-        self.marginRatioIC = 0.41           # 保证金比例
-        self.marginRatioIFIH = 0.41
+        self.marginRatioIC = 0.31 * 200          # 保证金比例 * 每点价格
+        self.marginRatioIF = 0.21 * 300
+        self.marginRatioIH = 0.21 * 300
+        self.accountLackCount = EMPTY_INT
+
         self.tickDict = {}                  # 实时价格行情
         self.orderDict = {}                 # 实时订单状态
 
@@ -112,7 +120,7 @@ class RmEngine(object):
     def registerEvent(self):
         """注册事件监听"""
         self.eventEngine.register(EVENT_TRADE, self.updateTrade)       # 成交回报事件
-        self.eventEngine.register(EVENT_ORDER, self.updateFreeze)      # 报单回报事件
+        # self.eventEngine.register(EVENT_ORDER, self.updateFreeze)      # 报单回报事件
         self.eventEngine.register(EVENT_TIMER, self.updateTimer)       # 计时器事件，每隔1秒发送一次
         self.eventEngine.register(EVENT_ACCOUNT, self.updateAccount)   # 账户回报事件
         self.eventEngine.register(EVENT_TICK, self.updateTick)         # Tick行情事件
@@ -138,6 +146,24 @@ class RmEngine(object):
         """更新账户可用资金"""
         account = event.dict_['data']
         self.account = account.available
+        # print 'account', self.account, time.strftime("%H:%M:%S")
+
+        # 原有保证金需求
+        marginNeedTotal = self.marginDict['IF'].marginNeed + self.marginDict['IH'].marginNeed + self.marginDict['IC'].marginNeed
+        # print marginNeedTotal
+        # 可用保证金小于所需保证金
+        if self.account < marginNeedTotal:
+            # 保证金不足计数
+            self.accountLackCount += 1
+            #
+            if self.accountLackCount > 1:
+                event1 = Event(type_=EVENT_RMSTOP)
+                event1.dict_['data'] = 'name'
+                self.eventEngine.put(event1)
+                self.writeRiskLog(u'发生异常情况：可用保证金小于所需保证金，停止所有策略')
+                print u'发生异常情况：可用保证金小于所需保证金，停止所有策略'
+        else:
+            self.accountLackCount = 0
 
     # ----------------------------------------------------------------------
     def updateTick(self, event):
@@ -162,7 +188,7 @@ class RmEngine(object):
         log.gatewayName = self.name
         event = Event(type_=EVENT_LOG)
         event.dict_['data'] = log
-        self.eventEngine.put(event)      
+        self.eventEngine.put(event)
     
     #----------------------------------------------------------------------
     def checkRisk(self, orderReq):
@@ -208,128 +234,282 @@ class RmEngine(object):
         # 策略需求检查时增加了冻结资金和持仓
         # 开仓：下单时冻结资金相应减少，撤单时冻结资金相应增加
         # 平仓：下单成交时冻结持仓减少
-        trade = event.dict_['data']
+        order = event.dict_['data']
         # 判断是否为历史报单
-        if self.startTime > trade.orderTime:
+        # print self.startTime, order.orderTime
+        if self.startTime > order.orderTime:
             # print u'历史报单'
-            # print trade.vtSymbol, trade.vtOrderID, trade.status, trade.orderTime, trade.offset, trade.direction
+            # print order.vtSymbol, order.vtOrderID, order.status, order.orderTime, order.offset, order.direction
             pass
         else:
-            vtOrderID = trade.vtOrderID
-            vtSymbol = trade.vtSymbol
+            vtOrderID = order.vtOrderID
+            vtSymbol = order.vtSymbol
+            vtSymbolType = vtSymbol[0:2]
             # 新的订单
             if vtOrderID not in self.orderDict:
-                self.orderDict[vtOrderID] = trade
-                # 开仓减少冻结保证金（因为开仓时可用保证金会减少，冻结保证金需同步减少）
-                if trade.offset == OFFSET_OPEN:
-                    if re.match('IH|IF', vtSymbol):
-                        self.accountFreeze -= trade.totalVolume * trade.price * 300 * self.marginRatioIFIH  # 报单数量乘以保证金
-                    else:
-                        self.accountFreeze -= trade.totalVolume * trade.price * 200 * self.marginRatioIC  # 报单数量乘以保证金
+                self.orderDict[vtOrderID] = order
+                if order.offset == OFFSET_OPEN:
+                    # 开仓减少冻结保证金（因为开仓时可用保证金会减少，冻结保证金需同步减少）
+                    self.adjustMarginDict(order)
+                    # 打印保证金字典
+                    self.printMarginDict(vtSymbolType)
+
             # 已有的订单
             else:
-                if trade.offset == OFFSET_OPEN:
-                    # 开仓撤单增加冻结保证金（因为开仓撤单时可用保证金会增加，冻结保证金需同步增加）
-                    if trade.status == STATUS_CANCELLED:
-                        if re.match('IH|IF', vtSymbol):
-                            self.accountFreeze += trade.totalVolume * trade.price * 300 * self.marginRatioIFIH  # 报单数量乘以保证金
-                        else:
-                            self.accountFreeze += trade.totalVolume * trade.price * 200 * self.marginRatioIC  # 报单数量乘以保证金
+                # 开仓撤单增加冻结保证金（因为开仓撤单时可用保证金会增加，冻结保证金需同步增加）
+                if order.offset == OFFSET_OPEN and order.status == STATUS_CANCELLED:
+                    self.adjustMarginDict(order)
+                    # 打印保证金字典
+                    self.printMarginDict(vtSymbolType)
 
-                elif trade.offset == OFFSET_CLOSE:
+                elif order.offset == OFFSET_CLOSE:
                     # 平仓成交减少冻结持仓（因为平仓成交会导致持仓会减少，冻结持仓需同步减少）
-                    if trade.status == STATUS_ALLTRADED:
+                    if order.status == STATUS_ALLTRADED:
                         # 多头平仓
-                        if trade.direction == DIRECTION_LONG:
-                            self.posFreezeDict[vtSymbol].shortPosition -= trade.totalVolume  # 空头减少
+                        if order.direction == DIRECTION_LONG:
+                            self.posFreezeDict[vtSymbol].shortPosition -= order.totalVolume  # 空头减少
                         # 空头平仓
-                        elif trade.direction == DIRECTION_SHORT:
-                            self.posFreezeDict[vtSymbol].longPosition -= trade.totalVolume  # 多头减少
+                        elif order.direction == DIRECTION_SHORT:
+                            self.posFreezeDict[vtSymbol].longPosition -= order.totalVolume  # 多头减少
 
+    # ----------------------------------------------------------------------
+    def printMarginDict(self, vtSymbolType):
+        """打印保证金字典"""
+        # by lm
+        print u'%s保证金字典' % vtSymbolType
+        print u'时间：%s' % time.strftime("%H:%M:%S")
+        print u'多头数量：%d' % self.marginDict[vtSymbolType].long
+        print u'多头保证金：%f' % self.marginDict[vtSymbolType].marginLong
+        print u'空头数量：%d' % self.marginDict[vtSymbolType].short
+        print u'空头保证金：%f' % self.marginDict[vtSymbolType].marginShort
+        print u'所需保证金：%f' % self.marginDict[vtSymbolType].marginNeed
 
-            print u'冻结保证金', self.accountFreeze
-            print u'冻结持仓', self.posFreezeDict
+    # ----------------------------------------------------------------------
+    def printPosition(self, posBufferDict, content):
+        """打印持仓"""
+        # by lm
+        print content
+        print u'时间：%s' % time.strftime("%H:%M:%S")
+        for vtSymbol in posBufferDict:
+            posBuffer = posBufferDict[vtSymbol]
+            print u'合约%s多头%d(可用%d)，空头%d(可用%d)。' % (vtSymbol, posBuffer.longPosition, posBuffer.longAvailable, posBuffer.shortPosition, posBuffer.shortAvailable)
 
+    # ----------------------------------------------------------------------
+    def adjustMarginDict(self, order):
+        """调整保证金字典"""
+        # by lm
+        vtSymbol = order.vtSymbol
+        vtSymbolType = vtSymbol[0:2]
+        marginRatio = self.getMarginRatio(vtSymbolType)
+
+        margin = marginData()
+        # 开仓
+        if order.offset == OFFSET_OPEN:
+            # 下单减少冻结保证金（因为开仓时可用保证金会减少，冻结保证金需同步减少）
+            if order.status != STATUS_CANCELLED:
+                # 开多
+                if order.direction == DIRECTION_LONG:
+                    margin.long -= order.totalVolume
+                    margin.marginLong -= order.totalVolume * marginRatio * order.price
+                # 开空
+                elif order.direction == DIRECTION_SHORT:
+                    margin.short -= order.totalVolume
+                    margin.marginShort -= order.totalVolume * marginRatio * order.price
+
+            # 撤单增加冻结保证金（因为开仓撤单时可用保证金会增加，冻结保证金需同步增加）
+            else:
+                # 开多
+                if order.direction == DIRECTION_LONG:
+                    margin.long += order.totalVolume
+                    margin.marginLong += order.totalVolume * marginRatio * order.price
+                # 开空
+                elif order.direction == DIRECTION_SHORT:
+                    margin.short += order.totalVolume
+                    margin.marginShort += order.totalVolume * marginRatio * order.price
+
+            # 更新保证金字典
+            self.marginDict[vtSymbolType] = self.merge(self.marginDict[vtSymbolType], margin)
 
     # ----------------------------------------------------------------------
     def strategyCheck(self, req, posBufferDict):
         """策略需求检查"""
         # by lm
         # 开仓检查保证金，平仓检查是否有持仓
+        statusMargin = True
+        statusPosition = True
+        # 保证金需求
+        marginDict = {}
+        marginDict['IF'] = marginData()
+        marginDict['IH'] = marginData()
+        marginDict['IC'] = marginData()
+        vtSymbolTypeDict = {}
 
         # 读取持仓和保证金情况
         for vtSymbol in req:
             require = req[vtSymbol]  # [方向，数量]
+            vtSymbolType = vtSymbol[0:2]
+            if vtSymbolType not in vtSymbolTypeDict:
+                vtSymbolTypeDict[vtSymbolType] = 1
+
             # 开仓检查保证金
             if require[0] == u'买开' or require[0] == u'卖开':
+                # 计算保证金需求
+                marginDict = self.computeMargin(vtSymbol, require, marginDict)
 
-                # 确定保证金
-                if re.match('IF|IH', vtSymbol):
-                    self.margin = self.marginRatioIFIH * self.tickDict[vtSymbol] * 300
+            # 平仓检查是否有持仓
+            else:
+                # 打印持仓信息
+                self.printPosition(posBufferDict, u'现有持仓')
+                # 打印冻结信息
+                self.printPosition(self.posFreezeDict, u'冻结持仓')
+                # 检查持仓是否足够
+                if vtSymbol in posBufferDict:
+                    statusPosition = statusPosition & self.checkPosition(vtSymbol, require, posBufferDict[vtSymbol])
                 else:
-                    self.margin = self.marginRatioIC * self.tickDict[vtSymbol] * 200
+                    print u'%s没有持仓。' % vtSymbol
+                    statusPosition = False
 
-                # 真实可用保证金为：可用保证金 - 冻结保证金
-                realMargin = self.account - self.accountFreeze
+        # 判断保证金是否足够
+        # 策略所需保证金为
+        marginNeed = marginDict['IF'].marginNeed + marginDict['IH'].marginNeed + marginDict['IC'].marginNeed
+        if marginNeed > 0:
+            print u'策略所需保证金为：%.2f' % marginNeed
+            print u'现有可用保证金为：%.2f' % self.account
+            # 原有保证金需求
+            marginNeedTotal = self.marginDict['IF'].marginNeed + self.marginDict['IH'].marginNeed + self.marginDict['IC'].marginNeed
+            if marginNeed + marginNeedTotal <= self.account:
+                print u'保证金足够'
+                # 更新保证金字典
+                self.updateMarginDict(marginDict)
+                # 打印保证金字典
+                for vtSymbolType in vtSymbolTypeDict:
+                    self.printMarginDict(vtSymbolType)
+            else:
+                print u'保证金不足，缺少%.2f' % (marginNeed + marginNeedTotal - self.account)
+                # self.writeRiskLog(u'保证金不足')
+                statusMargin = False
 
-                # 所需保证金小于真实可用保证金
-                if require[1] * self.margin <= realMargin:
-                    self.accountFreeze += require[1] * self.margin  # 冻结保证金
-                    print u'冻结保证金', self.accountFreeze
-                    return True
-                else:
-                    print u'保证金不足'
-                    return False
+        return statusMargin & statusPosition
 
-            # 买入平仓检查是否有持仓
-            elif require[0] == u'买平':
-                # 真实可用持仓为：持仓 - 冻结持仓
-                if vtSymbol in self.posFreezeDict:
-                    realPos = posBufferDict[vtSymbol].shortPosition - self.posFreezeDict[vtSymbol].shortPosition
-                else:
-                    posBuffer = PositionBuffer()
-                    posBuffer.vtSymbol = vtSymbol
-                    self.posFreezeDict[vtSymbol] = posBuffer
-                    realPos = posBufferDict[vtSymbol].shortPosition
+    # ----------------------------------------------------------------------
+    def getMarginRatio(self, vtSymbolType):
+        """合约保证金比例和合约点价格"""
+        # by lm
+        if vtSymbolType == 'IF':
+            return self.marginRatioIF
+        elif vtSymbolType == 'IH':
+            return self.marginRatioIH
+        elif vtSymbolType == 'IC':
+            return self.marginRatioIC
+
+    # ----------------------------------------------------------------------
+    def computeMargin(self, vtSymbol, require, marginDict):
+        """计算保证金需求"""
+        # by lm
+        vtSymbolType = vtSymbol[:2]  # 合约类型：IF,IH,IC
+        marginRatio = self.getMarginRatio(vtSymbolType)
+
+        # 查询是否在保证金字典中
+        if vtSymbolType not in marginDict:
+            margin = marginData()
+        else:
+            margin = marginDict[vtSymbolType]
+
+        if require[0] == u'买开':
+            margin.long += require[1]
+            margin.marginLong += require[1] * marginRatio * self.tickDict[vtSymbol]
+        elif require[0] == u'卖开':
+            margin.short += require[1]
+            margin.marginShort += require[1] * marginRatio * self.tickDict[vtSymbol]
+
+
+        # 所需保证金为多空保证金之和
+        # margin.marginNeed = margin.marginLong + margin.marginShort
+        # 所需保证金为多空保证金中的较大者
+        margin.marginNeed = max(margin.marginLong, margin.marginShort)
+        # 保存
+        marginDict[vtSymbolType] = margin
+        return marginDict
+
+    # ----------------------------------------------------------------------
+    def checkPosition(self, vtSymbol, require, posBuffer):
+        """检查持仓"""
+        # by lm
+        # 买入平仓检查是否有持仓
+        if require[0] == u'买平':
+            # 真实可用持仓为：可用持仓 - 预冻结持仓
+            if vtSymbol in self.posFreezeDict:
+                realPos = posBuffer.shortAvailable - self.posFreezeDict[vtSymbol].shortPosition
+            else:
+                posBuffer = PositionBuffer()
+                posBuffer.vtSymbol = vtSymbol
+                self.posFreezeDict[vtSymbol] = posBuffer
+                realPos = posBuffer.shortAvailable
+
+            # 平仓数量小于等于真实可用持仓
+            if require[1] <= realPos:
+                self.posFreezeDict[vtSymbol].shortPosition += require[1]  # 冻结持仓
+                print vtSymbol, u'冻结持仓', self.posFreezeDict[vtSymbol].shortPosition
+                return True
+            else:
+                print u'%s空头持仓不足以平仓' % vtSymbol
+                self.writeRiskLog(u'%s空头持仓不足以平仓' % vtSymbol)
+                return False
+
+        # 卖出平仓检查是否有持仓
+        else:
+            # 真实可用持仓为：持仓 - 冻结持仓
+            if vtSymbol in self.posFreezeDict:
+                realPos = posBuffer.longAvailable - self.posFreezeDict[vtSymbol].longPosition
+            else:
+                posBuffer = PositionBuffer()
+                posBuffer.vtSymbol = vtSymbol
+                self.posFreezeDict[vtSymbol] = posBuffer
+                realPos = posBuffer.longAvailable
 
                 # 平仓数量小于等于真实可用持仓
-                if require[1] <= realPos:
-                    self.posFreezeDict[vtSymbol].shortPosition += require[1]   # 冻结持仓
-                    print u'冻结持仓', self.posFreezeDict[vtSymbol].shortPosition
-                    return True
-                else:
-                    print u'空头持仓不足以平仓'
-                    return False
-
-            # 卖出平仓检查是否有持仓
+            if require[1] <= realPos:
+                self.posFreezeDict[vtSymbol].longPosition += require[1]  # 冻结持仓
+                print vtSymbol, u'冻结持仓', self.posFreezeDict[vtSymbol].longPosition
+                return True
             else:
-                # 真实可用持仓为：持仓 - 冻结持仓
-                if vtSymbol in self.posFreezeDict:
-                    realPos = posBufferDict[vtSymbol].longPosition - self.posFreezeDict[vtSymbol].longPosition
-                else:
-                    posBuffer = PositionBuffer()
-                    posBuffer.vtSymbol = vtSymbol
-                    self.posFreezeDict[vtSymbol] = posBuffer
-                    realPos = posBufferDict[vtSymbol].longPosition
+                print u'%s多头持仓不足以平仓' % vtSymbol
+                self.writeRiskLog(u'%s多头持仓不足以平仓' % vtSymbol)
+                return False
 
-                    # 平仓数量小于等于真实可用持仓
-                if require[1] <= realPos:
-                    self.posFreezeDict[vtSymbol].longPosition += require[1]  # 冻结持仓
-                    print u'冻结持仓', self.posFreezeDict[vtSymbol].longPosition
-                    return True
-                else:
-                    print u'多头持仓不足以平仓'
-                    return False
+    # ----------------------------------------------------------------------
+    def updateMarginDict(self, marginDict):
+        """更新保证金字典"""
+        # by lm
+        for vtSymbolType in self.marginDict:
+            self.marginDict[vtSymbolType] = self.merge(self.marginDict[vtSymbolType], marginDict[vtSymbolType])
+
+    # ----------------------------------------------------------------------
+    def merge(self, dict1, dict2):
+        """合并保证金字典"""
+        # by lm
+        dict = marginData()
+        dict.long = dict1.long + dict2.long
+        dict.marginLong = dict1.marginLong + dict2.marginLong
+        dict.short = dict1.short + dict2.short
+        dict.marginShort = dict1.marginShort + dict2.marginShort
+        dict.marginNeed = max(dict.marginLong, dict.marginShort)
+        return dict
 
     # ----------------------------------------------------------------------
     def abnormalCheck(self):
         """异常事件检查"""
         # by lm
         # 异常情况，停止策略
-        if self.accountFreeze < 0 or self.posFreezeDict < 0:
+        # 原有保证金需求
+        marginNeedTotal = self.marginDict['IF'].marginNeed + self.marginDict['IH'].marginNeed + self.marginDict['IC'].marginNeed
+        # 可用保证金小于所需保证金
+        if self.account < marginNeedTotal:
             event1 = Event(type_=EVENT_RMSTOP)
             event1.dict_['data'] = 'name'
             self.eventEngine.put(event1)
+            self.writeRiskLog(u'发生异常情况：可用保证金小于所需保证金，停止所有策略')
+            print u'发生异常情况：可用保证金小于所需保证金，停止所有策略'
 
 
     # ----------------------------------------------------------------------
@@ -382,3 +562,17 @@ class RmEngine(object):
             self.writeRiskLog(u'风险管理功能启动')
         else:
             self.writeRiskLog(u'风险管理功能停止')
+
+
+########################################################################
+class marginData(object):
+    """保证金数据类"""
+
+    # ----------------------------------------------------------------------
+    def __init__(self):
+        """Constructor"""
+        self.long = EMPTY_INT          # 多头数量
+        self.marginLong = EMPTY_FLOAT  # 多头保证金
+        self.short = EMPTY_INT         # 空头数量
+        self.marginShort = EMPTY_FLOAT # 空头保证金
+        self.marginNeed = EMPTY_FLOAT  # 所需保证金

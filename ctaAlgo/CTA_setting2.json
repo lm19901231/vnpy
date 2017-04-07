@@ -13,5 +13,15 @@
         "name": "tradeTest",
         "className": "tradeTest",
         "vtSymbol": "IC1705,IC1706"
+    },
+    {
+        "name": "test2",
+        "className": "Test2",
+        "vtSymbol": "IC1705,IC1706"
+    },
+    {
+        "name": "mood smooth",
+        "className": "MoodSmoothModel",
+        "vtSymbol": "IF1704"
     }
-]想·
+]

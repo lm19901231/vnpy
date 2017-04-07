@@ -32,6 +32,8 @@ class CtaTemplate(object):
     trading = False      # 是否启动交易，由引擎管理
     pos = {}             # 持仓情况，支持多合约，使用dict结构存储
     req = {}             # 策略需求，用于风控检查，提前锁定资金
+    tickDict = {}  # 保存最新bid，ask价格，key为vtSymbol, value为[bid1, ask1]
+
 
     # 参数列表，保存了参数的名称
     paramList = ['name',
@@ -94,6 +96,15 @@ class CtaTemplate(object):
     def onBar(self, bar):
         """收到Bar推送（必须由用户继承实现）"""
         raise NotImplementedError
+
+    # ----------------------------------------------------------------------
+    def getPrice(self, vtSymbol, direction):
+        """提取对应操作的买一卖一价格"""
+        if direction == u'买开' or direction == u'买平':  # 1买开、4买平
+            price = self.tickDict[vtSymbol][1]  # ask1
+        elif direction == u'卖开' or direction == u'卖平':  # 2卖平、3卖开
+            price = self.tickDict[vtSymbol][0]  # bid1
+        return price
 
     # ----------------------------------------------------------------------
     def buy(self, price, volume, vtSymbol, stop=False):

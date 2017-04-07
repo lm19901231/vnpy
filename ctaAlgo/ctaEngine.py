@@ -19,6 +19,7 @@
 import json
 import os
 import traceback
+import time
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
@@ -28,6 +29,8 @@ from eventEngine import *
 from vtConstant import *
 from vtGateway import VtSubscribeReq, VtOrderReq, VtCancelOrderReq, VtLogData
 from vtFunction import todayDate
+from vtGateway import VtPopupData
+from PyQt4 import QtGui, QtCore
 
 
 ########################################################################
@@ -36,13 +39,14 @@ class CtaEngine(object):
     settingFileName = 'CTA_setting.json'
     path = os.path.abspath(os.path.dirname(__file__))
     settingFileName = os.path.join(path, settingFileName)
+    signal1 = QtCore.pyqtSignal(type(Event()))
 
     #----------------------------------------------------------------------
     def __init__(self, mainEngine, eventEngine):
         """Constructor"""
         self.mainEngine = mainEngine
         self.eventEngine = eventEngine
-        
+
         # 当前日期
         self.today = todayDate()
         
@@ -153,6 +157,7 @@ class CtaEngine(object):
     #----------------------------------------------------------------------
     def cancelOrder(self, vtOrderID):
         """撤单"""
+        # print 'cancelorder', vtOrderID
         # 查询报单对象
         order = self.mainEngine.getOrder(vtOrderID)
         
@@ -309,6 +314,7 @@ class CtaEngine(object):
     def processPositionEvent(self, event):
         """处理持仓推送"""
         pos = event.dict_['data']
+        # print u'%s冻结持仓为：%d' % (pos.vtSymbol, pos.frozen), time.strftime('%H:%M:%S')
         
         # 更新持仓缓存数据
         if pos.vtSymbol in self.tickStrategyDict:
@@ -329,6 +335,34 @@ class CtaEngine(object):
         for name in self.strategyDict.keys():
             self.stopStrategy(name)
 
+    # ----------------------------------------------------------------------
+    def popupRequire(self, vtSymbol, name):
+        """弹窗请求"""
+        print 000002
+        popup = VtPopupData()
+        popup.name = name
+        popup.vtSymbol = vtSymbol
+        popup.require = True
+        popup.status = ''
+
+
+        event = Event(EVENT_POPUP)
+        event.dict_['data'] = popup
+        self.eventEngine.put(event)
+
+    # ----------------------------------------------------------------------
+    def processPopup(self, event):
+        """弹窗返回信息"""
+        print 000004
+        popup = event.dict_['data']
+        print '4',popup.require
+
+        if popup.require == False:
+            print popup.name, popup.require
+            strategy = self.strategyDict[popup.name]
+            strategy.onPopup(popup)
+
+
     #----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
@@ -337,6 +371,8 @@ class CtaEngine(object):
         self.eventEngine.register(EVENT_TRADE, self.processTradeEvent)
         self.eventEngine.register(EVENT_POSITION, self.processPositionEvent)
         self.eventEngine.register(EVENT_RMSTOP, self.processAbnormalStop)
+        # self.signal1.connect(self.openPopup)
+        self.eventEngine.register(EVENT_POPUP, self.processPopup)
  
     #----------------------------------------------------------------------
     def insertData(self, dbName, collectionName, data):
@@ -595,6 +631,60 @@ class CtaEngine(object):
             for d in posData:
                 strategy.pos = d['pos']
 
+#     ----------------------------------------------------------------------
+#     def openPopup(self, event=None):
+#         """打开弹窗"""
+#
+#         # popup = event.dict_['data']
+#         # print 'popup', popup.require, popup.status
+#         # if popup.require:
+#
+#         pp = OrderConfirmDialog()
+#         print 'pp.status', pp.status
+#         pp.show()
+#         # 等待弹窗赋值
+#         # popup.status = pp.status
+#         status = pp.status
+#         print status
+#
+#         # while status != 'empty':
+#         #     # 结果返回
+#         #     print 000003
+#         #     self.ctaEngine.processPopup(popup)
+#
+# #######################################################################
+# class OrderConfirmDialog(QtGui.QDialog):
+#     """弹窗确认"""
+#
+#     def __init__(self):
+#         QtGui.QWidget.__init__(self)
+#         button1 = QtGui.QPushButton(self)
+#         button2 = QtGui.QPushButton(self)
+#         text = QtGui.QLabel(self)
+#         text.setText("this is a order string")
+#         self.setGeometry(400, 400, 400, 200)
+#         self.status = 'empty'
+#
+#         button1.setText("yes")
+#         button2.setText("No")
+#         button1.move(100, 150)
+#         button2.move(200, 150)
+#         button1.clicked.connect(self.showdialog1)
+#         button2.clicked.connect(self.showdialog2)
+#         self.setWindowTitle(u"Attention!!!")
+#         # self.show()
+#
+#     def showdialog1(self):
+#         self.status = 'yes'
+#         print 'yes'
+#         self.ctaEngine.processPopup(self.status)
+#         self.close()
+#
+#     def showdialog2(self):
+#         self.status = 'no'
+#         print 'no'
+#         self.ctaEngine.processPopup(self.status)
+#         self.close()
 
 ########################################################################
 class PositionBuffer(object):
@@ -609,11 +699,13 @@ class PositionBuffer(object):
         self.longPosition = EMPTY_INT
         self.longToday = EMPTY_INT
         self.longYd = EMPTY_INT
+        self.longAvailable = EMPTY_INT
         
         # 空头
         self.shortPosition = EMPTY_INT
         self.shortToday = EMPTY_INT
         self.shortYd = EMPTY_INT
+        self.shortAvailable = EMPTY_INT
         
     #----------------------------------------------------------------------
     def updatePositionData(self, pos):
@@ -622,10 +714,12 @@ class PositionBuffer(object):
             self.longPosition = pos.position
             self.longYd = pos.ydPosition
             self.longToday = self.longPosition - self.longYd
+            self.longAvailable = self.longPosition - pos.frozen  # 可用 = 持仓 - 冻结
         else:
             self.shortPosition = pos.position
             self.shortYd = pos.ydPosition
             self.shortToday = self.shortPosition - self.shortYd
+            self.shortAvailable = self.shortPosition - pos.frozen
     
     #----------------------------------------------------------------------
     def updateTradeData(self, trade):
@@ -654,8 +748,7 @@ class PositionBuffer(object):
             else:
                 self.longPosition -= trade.volume
                 self.longYd -= trade.volume
-        
-        
+
     
     
 

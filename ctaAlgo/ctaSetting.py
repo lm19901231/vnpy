@@ -13,6 +13,7 @@ from ctaDemo import DoubleEmaDemo
 # from ctaTradeTest import tradeTest
 from test1 import Test1
 from test2 import Test2
+from moodSmoothModel import MoodSmoothModel
 
 STRATEGY_CLASS = {}
 STRATEGY_CLASS['DoubleEmaDemo'] = DoubleEmaDemo
@@ -20,3 +21,4 @@ STRATEGY_CLASS['DoubleEmaDemo'] = DoubleEmaDemo
 # STRATEGY_CLASS['tradeTest'] = tradeTest
 STRATEGY_CLASS['Test1'] = Test1
 STRATEGY_CLASS['Test2'] = Test2
+STRATEGY_CLASS['MoodSmooth'] = MoodSmoothModel

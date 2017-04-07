@@ -1,18 +1,17 @@
 
 import sys
-from PyQt4.QtGui import *
-from PyQt4.QtCore import *
+from PyQt4 import QtGui
 
+class OrderConfirmDialog(QtGui.QDialog):
 
-
-class OrderConfirmDialog(QDialog):
     def __init__(self):
-        QWidget.__init__(self)
-        button1 = QPushButton(self)
-        button2 = QPushButton(self)
-        text = QLabel(self)
+        QtGui.QWidget.__init__(self)
+        button1 = QtGui.QPushButton(self)
+        button2 = QtGui.QPushButton(self)
+        text = QtGui.QLabel(self)
         text.setText("this is a order string")
         self.setGeometry(400, 400, 400, 200)
+        self.status = 'empty'
 
         button1.setText("yes")
         button2.setText("No")
@@ -24,25 +23,18 @@ class OrderConfirmDialog(QDialog):
         self.show()
 
     def showdialog1(self):
-        global a
-        a = 'yes'
+        self.status = 'yes'
+        print 'yes'
         self.close()
-        return
 
     def showdialog2(self):
-        # self.close()
-        global a
-        a = "no"
+        self.status = 'no'
+        print 'no'
         self.close()
-        return
 
 if __name__ == "__main__":
-    global a
-    a = 0
-    app = QApplication(sys.argv)
+    app = QtGui.QApplication(sys.argv)
     w = OrderConfirmDialog()
     w.show()
-    print a
-    # sys.exit(app.exec_())
-    app.exec_()
-    print a
+    print w.status
+    sys.exit(app.exec_())

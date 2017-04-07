@@ -1,6 +1,7 @@
 # encoding: UTF-8
 
 import psutil
+import sys
 
 from uiBasicWidget import *
 from ctaAlgo.uiCtaWidget import CtaEngineManager
@@ -24,6 +25,9 @@ class MainWindow(QtGui.QMainWindow):
         
         self.initUi()
         self.loadWindowSettings('custom')
+
+        # 注册事件监听
+        # self.registerEvent()
         
     #----------------------------------------------------------------------
     def initUi(self):
@@ -96,6 +100,7 @@ class MainWindow(QtGui.QMainWindow):
         # 算法相关
         algoMenu = menubar.addMenu(u'算法')
         algoMenu.addAction(self.createAction(u'CTA策略', self.openCta))
+        algoMenu.addAction(self.createAction(u'弹窗', self.openPopup))
         
         # 帮助
         helpMenu = menubar.addMenu(u'帮助')
@@ -204,7 +209,16 @@ class MainWindow(QtGui.QMainWindow):
             self.widgetDict['rmM'].show()
         except KeyError:
             self.widgetDict['rmM'] = RmEngineManager(self.mainEngine.rmEngine, self.eventEngine)
-            self.widgetDict['rmM'].show()      
+            self.widgetDict['rmM'].show()
+
+    # ----------------------------------------------------------------------
+    def openPopup(self):
+        """打开弹窗"""
+        try:
+            self.widgetDict['popup'].show()
+        except KeyError:
+            self.widgetDict['popup'] = OrderConfirmDialog()
+            self.widgetDict['popup'].show()
     
     #----------------------------------------------------------------------
     def closeEvent(self, event):

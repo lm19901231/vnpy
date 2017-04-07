@@ -27,9 +27,9 @@ class Test2(CtaTemplate):
     # 策略参数
     spreadLimit = 66         # 展期价差
     direction = -1           # 方向，1大于，-1小于
-    direction1 = u'买开'     # 合约1操作方向，1买开，2卖平，3卖开，4买平
-    direction2 = u'卖开'     # 合约2操作方向，1买开，2卖平，3卖开，4买平
-    countLimit = 1           # 子单次数限制，一个子单操作一个数量的合约，一个母单包含多个子单。
+    direction1 = u'卖平'     # 合约1操作方向，1买开，2卖平，3卖开，4买平
+    direction2 = u'买平'     # 合约2操作方向，1买开，2卖平，3卖开，4买平
+    countLimit = 4           # 子单次数限制，一个子单操作一个数量的合约，一个母单包含多个子单。
     volume1 = countLimit     # 合约1数量
     volume2 = countLimit     # 合约2数量
     limitTime = 1            # 超时限制时间（秒）
@@ -45,12 +45,12 @@ class Test2(CtaTemplate):
     price2 = EMPTY_FLOAT       # 合约2最新成交价
     count = EMPTY_INT          # 展期次数
     spreadRt = EMPTY_FLOAT     # 实时价差
-    tickDict = {}              # 保存最新bid，ask价格，key为vtSymbol, value为[bid1, ask1]
-    orderDict = {}             # 保存委托变化推送
     vtOrderID1 = EMPTY_STRING
     vtOrderID2 = EMPTY_STRING
     pos = {}  # 持仓情况，支持多合约，使用dict结构存储
     req = {}  # 策略需求，用于风控检查，提前锁定资金
+
+    orderDict = {}  # 保存委托变化推送
 
     # 成交订单字典
     completeOrderDict = {}
@@ -112,7 +112,7 @@ class Test2(CtaTemplate):
         self.req = {}
         self.req[self.vtSymbol1] = [self.direction1, self.volume1]
         self.req[self.vtSymbol2] = [self.direction2, self.volume2]
-        self.writeCtaLog(u'策略需求为%s' % self.req)
+        self.writeCtaLog(u'策略需求为：\n%s,%s,%d\n%s,%s,%d' % (self.vtSymbol1, self.direction1, self.volume1, self.vtSymbol2, self.direction2, self.volume2))
 
         # 提交风控检查，并返回结果
         state = self.requireCheck(self.req)
@@ -130,6 +130,10 @@ class Test2(CtaTemplate):
     # ----------------------------------------------------------------------
     def onStop(self):
         """停止策略（必须由用户继承实现）"""
+
+        # 未成交需求进行释放
+
+
         self.writeCtaLog(u'测试策略2多合约展期停止')
         self.putEvent()
 
@@ -154,90 +158,91 @@ class Test2(CtaTemplate):
             self.price1 = self.getPrice(self.vtSymbol1, self.direction1)
             self.price2 = self.getPrice(self.vtSymbol2, self.direction2)
             self.spreadRt = abs(self.price1 - self.price2)  # 实时价差
-            print time.strftime("%H:%M:%S"), self.spreadRt
-            if (self.direction == 1 and self.spreadRt >= self.spreadLimit) or (self.direction == -1 and self.spreadRt <= self.spreadLimit):
-                if abs(self.pos[self.vtSymbol1]) < self.countLimit and abs(self.pos[self.vtSymbol2]) < self.countLimit and self.count < self.countLimit:
-                    # 弹窗确认模块
-                    # global t
-                    # global root
-                    #
-                    # root = Tk()
-                    # root.title("hello world")
-                    # root.geometry('300x200')
-                    #
-                    # t = None
-                    #
-                    # l = Label(root, text=u"弹窗确认模块", font=("Arial", 12))
-                    # l.pack(side=TOP)
-                    #
-                    # Button(root, text="Yes", command = self.yes).pack(side=LEFT)
-                    # Button(root, text="No", command = self.no).pack(side=RIGHT)
-                    # print t
-                    # root.mainloop()
-                    # print t
-                    #
-                    # if t == 'yes':
-                    #     print 'right'
+            # print time.strftime("%H:%M:%S"), self.spreadRt
+            if self.trading:
+                if (self.direction == 1 and self.spreadRt >= self.spreadLimit) or (self.direction == -1 and self.spreadRt <= self.spreadLimit):
+                    if abs(self.pos[self.vtSymbol1]) < self.countLimit and abs(self.pos[self.vtSymbol2]) < self.countLimit and self.count < self.countLimit:
+                        # 弹窗确认模块
+                        # global t
+                        # global root
+                        #
+                        # root = Tk()
+                        # root.title("hello world")
+                        # root.geometry('300x200')
+                        #
+                        # t = None
+                        #
+                        # l = Label(root, text=u"弹窗确认模块", font=("Arial", 12))
+                        # l.pack(side=TOP)
+                        #
+                        # Button(root, text="Yes", command = self.yes).pack(side=LEFT)
+                        # Button(root, text="No", command = self.no).pack(side=RIGHT)
+                        # print t
+                        # root.mainloop()
+                        # print t
+                        #
+                        # if t == 'yes':
+                        #     print 'right'
 
-                    self.vtOrderID1 = self.sendOrder(self.direction1, self.price1, 1, self.vtSymbol1, False)  # 卖出平仓  vtSymbol1
-                    # self.vtOrderID1 = self.buy(self.price1, 1, self.vtSymbol1)
-                    print self.vtSymbol1, self.direction1, self.price1, self.vtOrderID1
+                        self.vtOrderID1 = self.sendOrder(self.direction1, self.price1, 1, self.vtSymbol1, False)  # 卖出平仓  vtSymbol1
+                        # self.vtOrderID1 = self.buy(self.price1, 1, self.vtSymbol1)
+                        print self.vtSymbol1, self.direction1, self.price1, self.vtOrderID1, time.strftime("%H:%M:%S")
 
-                    self.vtOrderID2 = self.sendOrder(self.direction2, self.price2, 1, self.vtSymbol2, False)  # 买入开仓  vtSymbol2
-                    # vtOrderID2 = self.short(self.price2, 1, self.vtSymbol2)
-                    print self.vtSymbol2, self.direction2, self.price2, self.vtOrderID2
+                        self.vtOrderID2 = self.sendOrder(self.direction2, self.price2, 1, self.vtSymbol2, False)  # 买入开仓  vtSymbol2
+                        # vtOrderID2 = self.short(self.price2, 1, self.vtSymbol2)
+                        print self.vtSymbol2, self.direction2, self.price2, self.vtOrderID2, time.strftime("%H:%M:%S")
 
-                    # 确认下单成功，
-                    if self.vtOrderID1 != EMPTY_STRING and self.vtOrderID2 != EMPTY_STRING:
-                        self.count += 1
-                    print 'count', self.count
+                        # 确认下单成功，
+                        if self.vtOrderID1 != EMPTY_STRING and self.vtOrderID2 != EMPTY_STRING:
+                            self.count += 1
+                        print 'count', self.count
 
-            # 检查订单成交情况，如果超过1分钟未成交，先撤单，在下单
-            for vtOrderID in self.orderDict:
-                order = self.orderDict[vtOrderID]
-                if order != 'Finished':
-                    # 已成交，从字典中删除
-                    if order.status == STATUS_ALLTRADED:
-                        self.orderDict[vtOrderID] = 'Finished'  # 删除条目
+                # 检查订单成交情况，如果超过1分钟未成交，先撤单，在下单
+                for vtOrderID in self.orderDict:
+                    order = self.orderDict[vtOrderID]
+                    if order != 'Finished':
+                        # 已成交，从字典中删除
+                        if order.status == STATUS_ALLTRADED:
+                            self.orderDict[vtOrderID] = 'Finished'  # 删除条目
 
-                    # 已撤销，重新下单
-                    elif order.status == STATUS_CANCELLED:
-                        vtSymbol = order.vtSymbol
-                        if vtSymbol == self.vtSymbol1:
-                            self.price1 = self.getPrice(self.vtSymbol1, self.direction1)
-                            self.vtOrderID1 = self.sendOrder(self.direction1, self.price1, 1, self.vtSymbol1,
-                                                             False)  # 卖出平仓  vtSymbol1
-                            print self.vtSymbol1, self.direction1, self.price1, self.vtOrderID1
+                        # 已撤销，重新下单
+                        elif order.status == STATUS_CANCELLED:
+                            vtSymbol = order.vtSymbol
+                            if vtSymbol == self.vtSymbol1:
+                                self.price1 = self.getPrice(self.vtSymbol1, self.direction1)
+                                self.vtOrderID1 = self.sendOrder(self.direction1, self.price1, 1, self.vtSymbol1,
+                                                                 False)  # 卖出平仓  vtSymbol1
+                                print self.vtSymbol1, self.direction1, self.price1, self.vtOrderID1
 
-                            self.orderDict[vtOrderID] = 'Finished'  # 删除已撤销条目
+                                self.orderDict[vtOrderID] = 'Finished'  # 删除已撤销条目
 
-                        if vtSymbol == self.vtSymbol2:
-                            self.price2 = self.getPrice(self.vtSymbol2, self.direction2)
-                            self.vtOrderID2 = self.sendOrder(self.direction2, self.price2, 1, self.vtSymbol2,
-                                                             False)  # 卖出平仓  vtSymbol1
-                            print self.vtSymbol2, self.direction2, self.price2, self.vtOrderID2
+                            if vtSymbol == self.vtSymbol2:
+                                self.price2 = self.getPrice(self.vtSymbol2, self.direction2)
+                                self.vtOrderID2 = self.sendOrder(self.direction2, self.price2, 1, self.vtSymbol2,
+                                                                 False)  # 卖出平仓  vtSymbol1
+                                print self.vtSymbol2, self.direction2, self.price2, self.vtOrderID2
 
-                            self.orderDict[vtOrderID] = 'Finished'  # 删除已撤销条目
+                                self.orderDict[vtOrderID] = 'Finished'  # 删除已撤销条目
 
-                    # 未成交，未撤单，查看是否超时，若超时，撤单
-                    else:
-                        print order.status, order.orderTime
-                        nowList = time.strftime("%H:%M:%S").split(":", 3)  # 当前时间
-                        orderList = order.orderTime.split(":", 3)  # 下单时间
-                        nowMinute = int(nowList[1])
-                        nowSecond = int(nowList[2])
-                        orderTimeMinute = int(orderList[1])
-                        orderTimeSecond = int(orderList[2])
-                        timeOut = (nowMinute * 60 + nowSecond) - (orderTimeMinute * 60 + orderTimeSecond) > self.limitTime  # 是否超时
-                        print 'timeOut', timeOut
+                        # 未成交，未撤单，查看是否超时，若超时，撤单
+                        else:
+                            print order.status, order.orderTime
+                            nowList = time.strftime("%H:%M:%S").split(":", 3)  # 当前时间
+                            orderList = order.orderTime.split(":", 3)  # 下单时间
+                            nowMinute = int(nowList[1])
+                            nowSecond = int(nowList[2])
+                            orderTimeMinute = int(orderList[1])
+                            orderTimeSecond = int(orderList[2])
+                            timeOut = (nowMinute * 60 + nowSecond) - (orderTimeMinute * 60 + orderTimeSecond) > self.limitTime  # 是否超时
+                            print 'timeOut', timeOut
 
-                        # 如果超时，撤单
-                        if timeOut:
-                            print u'超时未成交，撤单'
-                            self.cancelOrder(vtOrderID)
+                            # 如果超时，撤单
+                            if timeOut:
+                                print u'超时未成交，撤单'
+                                self.cancelOrder(vtOrderID)
 
-            # 发出状态更新事件
-            self.putEvent()
+                # 发出状态更新事件
+                self.putEvent()
         except:
             print u'没有行情'
 
@@ -417,11 +422,7 @@ class Test2(CtaTemplate):
     # ----------------------------------------------------------------------
     def onOrder(self, order):
         """收到委托变化推送（必须由用户继承实现）"""
-        if order.vtSymbol == self.vtSymbol1:
-            self.orderDict[self.vtSymbol1] = order
-
-        if order.vtSymbol == self.vtSymbol2:
-            self.orderDict[self.vtSymbol2] = order
+        self.orderDict[order.vtOrderID] = order
 
 
     # ----------------------------------------------------------------------
@@ -431,20 +432,12 @@ class Test2(CtaTemplate):
         if vtOrderID not in self.completeOrderDict:
             self.completeOrderDict[vtOrderID] = trade
 
-        print u'成交回报'
-        print 'vtSymbol', trade.vtSymbol, 'price', trade.price, 'tradeTime', trade.tradeTime
-        print 'OrderID',trade.vtOrderID
-        print 'TradeID',trade.vtTradeID
+        print '****************************************'
+        print u'成交回报', time.strftime("%H:%M:%S")
+        print 'vtSymbol', trade.vtSymbol, 'price', trade.price, 'tradeTime', trade.tradeTime, 'OrderID',trade.vtOrderID
+        print '****************************************'
 
 
-    def getPrice(self, vtSymbol, direction):
-        """提取对应操作的买一卖一价格"""
-        if direction == u'买开' or direction == u'买平':  # 1买开、4买平
-            price = self.tickDict[vtSymbol][1]  # ask1
-        elif direction == u'卖开' or direction == u'卖平':  # 2卖平、3卖开
-            price = self.tickDict[vtSymbol][0]  # bid1
-
-        return price
 
 
 
